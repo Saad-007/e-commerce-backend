@@ -16,7 +16,10 @@ const heroRoutes = require('./routes/heroRoutes')
 const app = express();
 
 // Middleware
-const allowedOrigins = ['http://localhost:5173', 'http://localhost:3000'   // add this line to allow your deployed frontend domain
+const allowedOrigins = [
+  'http://localhost:5173',
+  'http://localhost:3000',
+  'https://ecommerce-client-zeta-tan.vercel.app'
 ];
 
 app.use(cors({
