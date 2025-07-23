@@ -1,4 +1,5 @@
 require('dotenv').config();
+console.log('MONGODB_URI:', process.env.MONGODB_URI);  // Add this debug line
 const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
@@ -19,7 +20,8 @@ const app = express();
 const allowedOrigins = [
   'http://localhost:5173',
   'http://localhost:3000',
-  'https://ecommerce-client-woad.vercel.app'
+  'https://ecommerce-client-woad.vercel.app',
+  process.env.FRONTEND_URL     
 ];
 
 app.use(cors({
