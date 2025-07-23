@@ -1,6 +1,6 @@
 require('dotenv').config();
-console.log('MONGODB_URI:', process.env.MONGODB_URI);  // Add this debug line
-const express = require('express');
+console.log('All ENV variables:', process.env); // Check if ANY variables are loading
+console.log('MONGODB_URI exists?', !!process.env.MONGODB_URI);const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
 const cookieParser = require('cookie-parser');
