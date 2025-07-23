@@ -19,7 +19,7 @@ const app = express();
 const allowedOrigins = [
   'http://localhost:5173',
   'http://localhost:3000',
-  'https://ecommerce-client-zeta-tan.vercel.app'
+  'https://ecommerce-client-woad.vercel.app/'
 ];
 
 app.use(cors({
@@ -61,6 +61,7 @@ app.use((err, req, res, next) => {
 
 // ✅ Connect to MongoDB
 mongoose.connect(process.env.MONGODB_URI)
+
   .then(() => console.log("✅ Connected to MongoDB"))
   .catch(err => console.error("❌ MongoDB connection error:", err));
 
