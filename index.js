@@ -65,34 +65,28 @@ app.use('/api/cart', cartRoutes);
 // Database Connection
 const connectDB = async () => {
   try {
-    const connectionString = process.env.MONGODB_URI?.trim();
-    
-    if (!connectionString) {
-      throw new Error('MONGODB_URI is missing in environment variables');
-    }
+    const uri = process.env.MONGODB_URI?.trim();
+    if (!uri) throw new Error('MONGODB_URI missing in Railway variables');
 
-    // Verify DB name is included
-    if (!connectionString.includes('/ecommerce?')) {
-      throw new Error('Connection string must include /ecommerce database name');
-    }
-
-    await mongoose.connect(connectionString, {
-      serverSelectionTimeoutMS: 10000,
-      connectTimeoutMS: 15000,
+    // Railway-specific timeout settings
+    await mongoose.connect(uri, {
+      serverSelectionTimeoutMS: 5000,
+      socketTimeoutMS: 30000,
+      connectTimeoutMS: 30000,
       retryWrites: true,
       w: 'majority'
     });
-    
-    console.log('✅ MongoDB connected to:', mongoose.connection.db.databaseName);
+
+    console.log('✅ Connected to DB:', mongoose.connection.db.databaseName);
   } catch (err) {
-    console.error('❌ MongoDB connection failed:', err.message);
-    if (err.message.includes('bad auth')) {
-      console.error('Authentication failed - check username/password');
-    }
+    console.error('❌ Railway Connection Error:', {
+      message: err.message,
+      code: err.code,
+      stack: err.stack
+    });
     process.exit(1);
   }
 };
-
 // Server Startup
 connectDB().then(() => {
   const PORT = process.env.PORT || 5000;
