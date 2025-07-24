@@ -1,4 +1,7 @@
-require('dotenv').config(); // This MUST be at the very top
+if (process.env.NODE_ENV !== 'production') {
+  require('dotenv').config();
+}
+
 
 // Debugging environment variables
 console.log('All ENV variables:', process.env);
