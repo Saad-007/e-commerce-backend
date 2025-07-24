@@ -29,8 +29,10 @@ const app = express();
 const allowedOrigins = [
   'http://localhost:5173',
   'http://localhost:3000',
-  'https://ecommerce-client-woad.vercel.app'
-].filter(Boolean);
+  'https://ecommerce-client-woad.vercel.app',
+  'https://ecommerce-client-g7uy0gj5r-saad-3892s-projects.vercel.app'
+];
+
 
 app.use(cors({
   origin: (origin, callback) => {
