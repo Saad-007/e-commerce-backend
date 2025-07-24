@@ -27,25 +27,36 @@ const app = express();
 
 // Middleware - CORS
 const allowedOrigins = [
-  'http://localhost:5173',
-  'http://localhost:3000',
+  // Your main production domain
   'https://ecommerce-client-woad.vercel.app',
-  'https://ecommerce-client-g7uy0gj5r-saad-3892s-projects.vercel.app'
+  
+  // All preview deployments pattern
+  /https:\/\/ecommerce-client(-[a-z0-9]+)?\.vercel\.app/,
+  
+  // Local development
+  'http://localhost:5173'
 ];
-
 
 app.use(cors({
   origin: (origin, callback) => {
-    if (!origin || allowedOrigins.includes(origin)) {
+    if (!origin) return callback(null, true); // Allow requests with no origin
+    
+    const isAllowed = allowedOrigins.some(pattern => {
+      return typeof pattern === 'string' 
+        ? origin === pattern
+        : pattern.test(origin);
+    });
+    
+    if (isAllowed) {
       callback(null, true);
     } else {
-      console.warn(`CORS blocked origin: ${origin}`);
-      callback(new Error("Not allowed by CORS"));
+      console.warn('Blocked by CORS:', origin);
+      callback(new Error('Not allowed by CORS'));
     }
   },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization']
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
 }));
 
 // Body parsers
