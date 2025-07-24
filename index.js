@@ -1,14 +1,12 @@
 require('dotenv').config();
 
-
-
-// Debugging environment variables
-console.log('All ENV variables:', process.env);
-console.log('MONGODB_URI exists?', !!process.env.MONGODB_URI);
-console.log('MONGODB_URI value:', process.env.MONGODB_URI); // Add this to see the actual value
+// Enhanced debug logging
+console.log('=== ENVIRONMENT VARIABLES ===');
+console.log('MONGODB_URI:', process.env.MONGODB_URI ? 'Exists' : 'MISSING');
+console.log('All variables:', Object.keys(process.env));
 
 const express = require('express');
-const mongoose = require('mongoose'); // Only declare mongoose once
+const mongoose = require('mongoose');
 const cors = require('cors');
 const cookieParser = require('cookie-parser');
 const morgan = require('morgan');
@@ -59,39 +57,69 @@ app.use('/api/users', userRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/cart', cartRoutes);
 
-// MongoDB Connection - IMPROVED VERSION
+// Enhanced MongoDB Connection
 const connectDB = async () => {
   try {
-    if (!process.env.MONGODB_URI) {
-      throw new Error('MONGODB_URI is not defined in environment variables');
+    // Trim and verify connection string
+    const connectionString = process.env.MONGODB_URI?.trim();
+    
+    if (!connectionString) {
+      throw new Error('MONGODB_URI is missing or empty in environment variables');
     }
 
-    await mongoose.connect(process.env.MONGODB_URI, {
+    console.log('Connecting to MongoDB with URI:', connectionString.replace(/:\/\/.*@/, '://<credentials>@'));
+
+    const connectionOptions = {
       useNewUrlParser: true,
       useUnifiedTopology: true,
-      serverSelectionTimeoutMS: 5000,
-      connectTimeoutMS: 10000
-    });
+      serverSelectionTimeoutMS: 10000,
+      connectTimeoutMS: 15000
+    };
+
+    await mongoose.connect(connectionString, connectionOptions);
+    
     console.log('✅ MongoDB connected successfully');
+    console.log('Database Name:', mongoose.connection.db.databaseName);
   } catch (err) {
-    console.error('❌ MongoDB connection error:', err.message);
-    process.exit(1); // Exit process with failure
+    console.error('❌ MongoDB connection failed:', err.message);
+    console.error('Full error:', err);
+    process.exit(1);
   }
 };
 
-// Connect to DB before starting server
+// Database connection and server start
 connectDB().then(() => {
   const PORT = process.env.PORT || 5000;
   app.listen(PORT, () => {
     console.log(`🚀 Server running on port ${PORT}`);
+    console.log(`🛡️  CORS allowed for: ${allowedOrigins.join(', ')}`);
   });
 });
 
-// Global Error Handler
+// Enhanced error handler
 app.use((err, req, res, next) => {
+  console.error('‼️ Server Error:', err.stack);
+  
   if (err.message === 'Not allowed by CORS') {
-    return res.status(403).json({ message: 'CORS origin not allowed' });
+    return res.status(403).json({ 
+      status: 'fail', 
+      message: 'CORS origin not allowed',
+      allowedOrigins
+    });
   }
-  console.error(err.stack);
-  res.status(500).json({ message: 'Something went wrong!' });
+  
+  res.status(500).json({ 
+    status: 'error',
+    message: 'Internal server error',
+    error: process.env.NODE_ENV === 'development' ? err.message : undefined
+  });
+});
+
+// Add health check endpoint
+app.get('/health', (req, res) => {
+  res.json({
+    status: 'UP',
+    dbStatus: mongoose.connection.readyState === 1 ? 'connected' : 'disconnected',
+    timestamp: new Date()
+  });
 });
