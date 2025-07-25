@@ -2,118 +2,276 @@ const mongoose = require("mongoose");
 const User = require("../models/User");
 const Product = require("../models/Product");
 
-// ✅ Get logged-in user's cart
+// Enhanced cart controller with better security and validation
 exports.getCart = async (req, res) => {
   try {
+    // Strict user verification
+    if (!req.user || !mongoose.Types.ObjectId.isValid(req.user.id)) {
+      return res.status(401).json({ message: "Invalid user authentication" });
+    }
+
     if (req.user.role === "admin") {
       return res.status(403).json({ 
-        message: "Admins cannot have shopping carts. Please use a customer account."
+        message: "Admin accounts don't have shopping carts"
       });
     }
 
-    const user = await User.findById(req.user.id).populate("cart.productId");
+    const user = await User.findById(req.user.id)
+      .select("cart")
+      .populate({
+        path: "cart.productId",
+        select: "name price offerPrice image stock status"
+      });
 
     if (!user) {
       return res.status(404).json({ message: "User not found" });
     }
 
+    // Filter out any invalid cart items
+    const validCart = user.cart.filter(item => item.productId);
+    
+    // Update user's cart if any invalid items were filtered
+    if (validCart.length !== user.cart.length) {
+      user.cart = validCart;
+      await user.save();
+    }
+
     res.status(200).json({ 
-      cart: user.cart,
+      success: true,
+      cart: validCart,
       userId: user._id
     });
   } catch (err) {
     console.error("Cart fetch error:", err);
-    res.status(500).json({ message: "Failed to fetch cart" });
+    res.status(500).json({ 
+      success: false,
+      message: "Failed to fetch cart",
+      error: err.message
+    });
   }
 };
 
-// ✅ Add or update cart
+// Secure cart update with additional validation
 exports.addToCart = async (req, res) => {
+  const session = await mongoose.startSession();
+  session.startTransaction();
+  
   try {
+    // Validate user
+    if (!req.user || !mongoose.Types.ObjectId.isValid(req.user.id)) {
+      return res.status(401).json({ message: "Invalid user authentication" });
+    }
+
     if (req.user.role === "admin") {
       return res.status(403).json({ 
-        message: "Admin accounts cannot modify carts. Switch to a customer account."
+        message: "Admin accounts cannot modify carts"
       });
     }
 
     const { cart } = req.body;
 
+    // Validate cart structure
     if (!Array.isArray(cart)) {
-      return res.status(400).json({ message: "Invalid cart format. Must be an array." });
+      return res.status(400).json({ 
+        success: false,
+        message: "Cart must be an array of items" 
+      });
     }
 
-    const user = await User.findById(req.user.id);
-    if (!user) {
-      return res.status(404).json({ message: "User not found" });
+    // Validate each cart item
+    const validatedCart = [];
+    const productIds = [];
+    
+    for (const item of cart) {
+      if (!item.productId || !mongoose.Types.ObjectId.isValid(item.productId)) {
+        continue; // Skip invalid items
+      }
+      
+      if (typeof item.quantity !== "number" || item.quantity < 1) {
+        continue; // Skip invalid quantities
+      }
+
+      productIds.push(item.productId);
+      validatedCart.push({
+        productId: item.productId,
+        quantity: Math.min(item.quantity, 10) // Limit max quantity
+      });
     }
 
-    // ✅ Filter & validate product IDs
-    const productIds = cart
-      .map(item => item.productId)
-      .filter(id => id && mongoose.Types.ObjectId.isValid(id));
+    // Verify products exist and are available
+    const products = await Product.find({
+      _id: { $in: productIds },
+      status: "active"
+    }).session(session);
 
-    if (productIds.length !== cart.length) {
-      return res.status(400).json({ message: "One or more product IDs are invalid" });
+    if (products.length !== productIds.length) {
+      await session.abortTransaction();
+      return res.status(400).json({
+        success: false,
+        message: "Some products are unavailable",
+        invalidProducts: productIds.filter(id => 
+          !products.some(p => p._id.equals(id))
+        )
+      });
     }
 
-    const existingCount = await Product.countDocuments({ _id: { $in: productIds } });
-    if (existingCount !== productIds.length) {
-      return res.status(400).json({ message: "Some products do not exist" });
+    // Check product stock
+    const stockIssues = [];
+    for (const item of validatedCart) {
+      const product = products.find(p => p._id.equals(item.productId));
+      if (product.stock < item.quantity) {
+        stockIssues.push({
+          productId: item.productId,
+          available: product.stock,
+          requested: item.quantity
+        });
+      }
     }
 
-    // ✅ Perform atomic cart update
-    const updatedUser = await User.findByIdAndUpdate(
+    if (stockIssues.length > 0) {
+      await session.abortTransaction();
+      return res.status(400).json({
+        success: false,
+        message: "Some products don't have enough stock",
+        stockIssues
+      });
+    }
+
+    // Update user's cart atomically
+    const user = await User.findByIdAndUpdate(
       req.user.id,
-      { $set: { cart } },
-      { new: true, runValidators: true }
-    ).populate("cart.productId");
+      { $set: { cart: validatedCart } },
+      { new: true, session }
+    ).populate({
+      path: "cart.productId",
+      select: "name price offerPrice image"
+    });
 
-    res.status(200).json({ 
+    await session.commitTransaction();
+    
+    res.status(200).json({
+      success: true,
       message: "Cart updated successfully",
-      cart: updatedUser.cart
+      cart: user.cart
     });
   } catch (err) {
+    await session.abortTransaction();
     console.error("Cart update error:", err);
     res.status(500).json({ 
+      success: false,
       message: "Failed to update cart",
       error: err.message
     });
+  } finally {
+    session.endSession();
   }
 };
-// Merge carts on login
+
+// Enhanced cart merging with conflict resolution
 exports.mergeCarts = async (req, res) => {
+  const session = await mongoose.startSession();
+  session.startTransaction();
+
   try {
     const { guestCart } = req.body;
-    const user = await User.findById(req.user.id);
-    
-    if (!user) {
-      return res.status(404).json({ message: "User not found" });
+
+    if (!Array.isArray(guestCart)) {
+      return res.status(400).json({
+        success: false,
+        message: "Guest cart must be an array"
+      });
     }
 
-    // Merge strategy (you can customize this)
-    const mergedCart = [...user.cart];
-    
-    guestCart.forEach(guestItem => {
-      const existing = mergedCart.find(item => 
-        item.productId.toString() === guestItem.productId
-      );
-      
-      if (existing) {
-        existing.quantity += guestItem.quantity;
+    // Get current user with cart
+    const user = await User.findById(req.user.id)
+      .select("cart")
+      .session(session);
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: "User not found"
+      });
+    }
+
+    // Validate and normalize guest cart items
+    const validGuestItems = guestCart
+      .filter(item => 
+        item.productId && 
+        mongoose.Types.ObjectId.isValid(item.productId) &&
+        typeof item.quantity === "number" &&
+        item.quantity > 0
+      )
+      .map(item => ({
+        productId: new mongoose.Types.ObjectId(item.productId),
+        quantity: Math.min(item.quantity, 10) // Limit quantity
+      }));
+
+    // Merge carts with quantity accumulation
+    const mergedCartMap = new Map();
+
+    // Add existing user cart items
+    user.cart.forEach(item => {
+      mergedCartMap.set(item.productId.toString(), {
+        productId: item.productId,
+        quantity: item.quantity
+      });
+    });
+
+    // Merge with guest cart items
+    validGuestItems.forEach(guestItem => {
+      const key = guestItem.productId.toString();
+      if (mergedCartMap.has(key)) {
+        // Sum quantities if product exists in both carts
+        const existing = mergedCartMap.get(key);
+        mergedCartMap.set(key, {
+          productId: existing.productId,
+          quantity: Math.min(existing.quantity + guestItem.quantity, 10)
+        });
       } else {
-        mergedCart.push(guestItem);
+        // Add new item from guest cart
+        mergedCartMap.set(key, guestItem);
       }
     });
 
+    // Convert back to array
+    const mergedCart = Array.from(mergedCartMap.values());
+
+    // Verify products exist
+    const productIds = mergedCart.map(item => item.productId);
+    const existingProducts = await Product.countDocuments({
+      _id: { $in: productIds },
+      status: "active"
+    }).session(session);
+
+    if (existingProducts !== productIds.length) {
+      await session.abortTransaction();
+      return res.status(400).json({
+        success: false,
+        message: "Some products in the merged cart are unavailable"
+      });
+    }
+
+    // Update user's cart
     user.cart = mergedCart;
-    await user.save();
+    await user.save({ session });
+
+    await session.commitTransaction();
 
     res.status(200).json({
+      success: true,
       message: "Carts merged successfully",
       cart: user.cart
     });
   } catch (err) {
+    await session.abortTransaction();
     console.error("Cart merge error:", err);
-    res.status(500).json({ message: "Failed to merge carts" });
+    res.status(500).json({
+      success: false,
+      message: "Failed to merge carts",
+      error: err.message
+    });
+  } finally {
+    session.endSession();
   }
 };
