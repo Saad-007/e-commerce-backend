@@ -39,18 +39,20 @@ const allowedOrigins = [
 
 app.use(cors({
   origin: (origin, callback) => {
-    if (!origin) return callback(null, true); // Allow requests with no origin
-    
-    const isAllowed = allowedOrigins.some(pattern => {
-      return typeof pattern === 'string' 
-        ? origin === pattern
-        : pattern.test(origin);
-    });
-    
+    if (!origin) return callback(null, true);
+
+    const whitelist = [
+      'https://ecommerce-client-woad.vercel.app',
+      'http://localhost:5173'
+    ];
+
+    // You can add more dynamic preview URLs here if needed
+    const isAllowed = whitelist.includes(origin);
+
     if (isAllowed) {
-      callback(null, true);
+      callback(null, origin); // ✅ return exact origin
     } else {
-      console.warn('Blocked by CORS:', origin);
+      console.warn('❌ Blocked by CORS:', origin);
       callback(new Error('Not allowed by CORS'));
     }
   },
@@ -58,6 +60,7 @@ app.use(cors({
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
 }));
+
 
 // Body parsers
 app.use(express.json({ limit: '10mb' }));

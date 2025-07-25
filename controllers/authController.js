@@ -15,13 +15,14 @@ const signToken = (id, role) => {
 const createSendToken = (user, statusCode, res) => {
   const token = signToken(user._id, user.role);
   
-  const cookieOptions = {
-    expires: new Date(
-      Date.now() + process.env.JWT_COOKIE_EXPIRES_IN * 24 * 60 * 60 * 1000
-    ),
-    httpOnly: true,
-    secure: process.env.NODE_ENV === 'production'
-  };
+ const isProd = process.env.NODE_ENV === 'production';
+
+const cookieOptions = {
+  httpOnly: true,
+  secure: isProd,
+  sameSite: isProd ? 'None' : 'Lax',
+  expires: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
+};
 
   res.cookie('jwt', token, cookieOptions);
 
