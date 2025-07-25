@@ -27,33 +27,26 @@ const app = express();
 
 // Middleware - CORS
 const allowedOrigins = [
-  // Your main production domain
-  'https://ecommerce-client-woad.vercel.app',
-  
-  // All preview deployments pattern
-  /https:\/\/ecommerce-client(-[a-z0-9]+)?\.vercel\.app/,
-  
-  // Local development
-  'http://localhost:5173'
+  'https://ecommerce-client-woad.vercel.app',  // Main prod
+  'http://localhost:5173',                    // Local dev
+];
+
+const allowedOriginPatterns = [
+  /^https:\/\/ecommerce-client(-[a-z0-9]+)?\.vercel\.app$/, // Preview URLs
 ];
 
 app.use(cors({
   origin: (origin, callback) => {
-    if (!origin) return callback(null, true);
+    if (!origin) return callback(null, true); // Allow no-origin requests (e.g., curl)
 
-    const whitelist = [
-      'https://ecommerce-client-woad.vercel.app',
-      'http://localhost:5173'
-    ];
+    const isExactMatch = allowedOrigins.includes(origin);
+    const isPatternMatch = allowedOriginPatterns.some((pattern) => pattern.test(origin));
 
-    // You can add more dynamic preview URLs here if needed
-    const isAllowed = whitelist.includes(origin);
-
-    if (isAllowed) {
-      callback(null, origin); // ✅ return exact origin
+    if (isExactMatch || isPatternMatch) {
+      return callback(null, true);  // ✅ Allow this origin
     } else {
-      console.warn('❌ Blocked by CORS:', origin);
-      callback(new Error('Not allowed by CORS'));
+      console.warn('❌ CORS blocked:', origin);
+      return callback(new Error('Not allowed by CORS'));
     }
   },
   credentials: true,
