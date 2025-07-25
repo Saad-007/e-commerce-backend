@@ -128,35 +128,46 @@ exports.protect = async (req, res, next) => {
   }
 };
 
-exports.isLoggedIn = async (req, res, next) => {
+exports.isLoggedIn = async (req, res) => {
   try {
-    if (req.cookies.jwt) {
-      const decoded = await promisify(jwt.verify)(
-        req.cookies.jwt,
-        process.env.JWT_SECRET
-      );
-
-      const currentUser = await User.findById(decoded.id);
-      if (!currentUser) {
-        return res.status(200).json({ isLoggedIn: false });
-      }
-
-      return res.status(200).json({
-        isLoggedIn: true,
-        user: {
-          id: currentUser._id,
-          name: currentUser.name,
-          email: currentUser.email,
-          role: currentUser.role
-        }
+    // Check for token in cookies first
+    const token = req.cookies.jwt;
+    
+    if (!token) {
+      return res.status(200).json({ 
+        isLoggedIn: false 
       });
     }
-    res.status(200).json({ isLoggedIn: false });
+
+    // Verify token
+    const decoded = await promisify(jwt.verify)(token, process.env.JWT_SECRET);
+
+    // Check if user still exists
+    const currentUser = await User.findById(decoded.id);
+    if (!currentUser) {
+      return res.status(200).json({ 
+        isLoggedIn: false,
+        message: 'User no longer exists' 
+      });
+    }
+
+    // Return minimal user data
+    res.status(200).json({
+      isLoggedIn: true,
+      user: {
+        id: currentUser._id,
+        name: currentUser.name,
+        email: currentUser.email,
+        role: currentUser.role
+      }
+    });
+
   } catch (err) {
-    res.status(200).json({ isLoggedIn: false });
+    res.status(200).json({ 
+      isLoggedIn: false 
+    });
   }
 };
-
 exports.logout = (req, res) => {
   res.cookie('jwt', 'loggedout', {
     expires: new Date(Date.now() + 10 * 1000),
