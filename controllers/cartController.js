@@ -80,3 +80,40 @@ exports.addToCart = async (req, res) => {
     });
   }
 };
+// Merge carts on login
+exports.mergeCarts = async (req, res) => {
+  try {
+    const { guestCart } = req.body;
+    const user = await User.findById(req.user.id);
+    
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    // Merge strategy (you can customize this)
+    const mergedCart = [...user.cart];
+    
+    guestCart.forEach(guestItem => {
+      const existing = mergedCart.find(item => 
+        item.productId.toString() === guestItem.productId
+      );
+      
+      if (existing) {
+        existing.quantity += guestItem.quantity;
+      } else {
+        mergedCart.push(guestItem);
+      }
+    });
+
+    user.cart = mergedCart;
+    await user.save();
+
+    res.status(200).json({
+      message: "Carts merged successfully",
+      cart: user.cart
+    });
+  } catch (err) {
+    console.error("Cart merge error:", err);
+    res.status(500).json({ message: "Failed to merge carts" });
+  }
+};
