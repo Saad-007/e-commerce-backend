@@ -27,6 +27,8 @@ const userSchema = new mongoose.Schema({
     enum: ['user', 'admin', 'superadmin'],
     default: 'user'
   },
+
+  // 🛒 Persistent Cart
   cart: [
     {
       productId: {
@@ -40,6 +42,18 @@ const userSchema = new mongoose.Schema({
       }
     }
   ],
+
+  // ❤️ Persistent Wishlist
+  wishlist: [
+    {
+      productId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Product',
+        required: true
+      }
+    }
+  ],
+
   passwordResetToken: String,
   passwordResetExpires: Date,
   createdAt: {
@@ -63,10 +77,8 @@ userSchema.methods.comparePassword = async function (candidatePassword) {
 // 🔁 Generate password reset token
 userSchema.methods.createPasswordResetToken = function () {
   const resetToken = crypto.randomBytes(32).toString('hex');
-
   this.passwordResetToken = crypto.createHash('sha256').update(resetToken).digest('hex');
-  this.passwordResetExpires = Date.now() + 10 * 60 * 1000; // 10 mins
-
+  this.passwordResetExpires = Date.now() + 10 * 60 * 1000; // 10 minutes
   return resetToken;
 };
 
