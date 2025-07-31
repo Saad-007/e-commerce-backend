@@ -35,11 +35,13 @@ const protect = async (req, res, next) => {
     }
 
     // ✅ Fix here: only assign essential info
-    req.user = {
-      id: currentUser._id.toString(),
-      role: currentUser.role,
-      email: currentUser.email,
-    };
+req.user = {
+  id: currentUser._id.toString(),
+  role: currentUser.role,
+  email: currentUser.email,
+  isAdmin: currentUser.role === 'admin',
+};
+
 
     next();
   } catch (err) {
