@@ -1,9 +1,16 @@
 const HeroSlide = require("../models/HeroSlide");
 
-// GET all hero slides
+// GET all hero slides (OPTIMIZED)
 const getHeroSlides = async (req, res) => {
   try {
-    const slides = await HeroSlide.find();
+    // ⚡ SPEED FIX: Added .lean()
+    // This returns plain JSON objects instead of heavy Mongoose Documents.
+    // It reduces memory usage and speeds up the response time significantly.
+    const slides = await HeroSlide.find().lean();
+    
+    // Note: If you need them in a specific order (like newest first), use:
+    // const slides = await HeroSlide.find().sort({ createdAt: -1 }).lean();
+
     res.json({ slides });
   } catch (err) {
     res.status(500).json({ message: "Server error", error: err.message });

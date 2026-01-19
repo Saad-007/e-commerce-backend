@@ -41,21 +41,39 @@ const createProduct = async (req, res) => {
 // READ ALL
 const getAllProducts = async (req, res) => {
   try {
-    // Add featured filter if requested
-    const filter = {};
-    if (req.query.featured === "true") {
-      filter.featured = true;
-    }
-    if (req.query.status === "true") {
-      filter.status = true;
-    }
+    const { page = 1, limit = 20, featured, status } = req.query;
 
-    const products = await Product.find(filter).sort({ createdAt: -1 });
-    res.json(products);
+    // Filters
+    const filter = {};
+    if (featured === "true") filter.featured = true;
+    if (status === "true") filter.status = true;
+
+    // ✅ Use correct fields from schema
+    const projection = "name price image images category featured status createdAt";
+
+    // Query with pagination + lean (plain JS objects, faster)
+    const products = await Product.find(filter, projection)
+      .sort({ createdAt: -1 })
+      .skip((page - 1) * parseInt(limit))
+      .limit(parseInt(limit))
+      .lean();
+
+    const total = await Product.countDocuments(filter);
+
+    res.json({
+      total,
+      page: parseInt(page),
+      limit: parseInt(limit),
+      products
+    });
   } catch (err) {
+    console.error("Error fetching products:", err);
     res.status(500).json({ message: err.message });
   }
 };
+
+
+
 
 // GET FEATURED PRODUCTS
 const getFeaturedProducts = async (req, res) => {

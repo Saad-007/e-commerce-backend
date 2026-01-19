@@ -3,15 +3,13 @@ require('dotenv').config();
 // Enhanced debug logging
 console.log('=== ENVIRONMENT VARIABLES ===');
 console.log('MONGODB_URI:', process.env.MONGODB_URI ? 'Exists' : 'MISSING');
-if (process.env.MONGODB_URI) {
-  console.log('DB Connection:', process.env.MONGODB_URI.replace(/:\/\/[^@]+@/, '://<credentials>@'));
-}
 
 const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
 const cookieParser = require('cookie-parser');
 const morgan = require('morgan');
+const compression = require('compression'); // ⚡ SPEED UPGRADE 1
 
 // Route imports
 const cmsRoutes = require("./routes/cmsRoutes");
@@ -27,6 +25,10 @@ const salesRoutes = require('./routes/salesRoutes');
 
 const app = express();
 
+// ⚡ SPEED UPGRADE 2: Enable Gzip Compression
+// This compresses your API responses, making them download much faster
+app.use(compression());
+
 // Middleware - CORS
 const allowedOrigins = [
   'https://ecommerce-client-woad.vercel.app',  // Main prod
@@ -39,13 +41,13 @@ const allowedOriginPatterns = [
 
 app.use(cors({
   origin: (origin, callback) => {
-    if (!origin) return callback(null, true); // Allow no-origin requests (e.g., curl)
+    if (!origin) return callback(null, true); // Allow no-origin requests
 
     const isExactMatch = allowedOrigins.includes(origin);
     const isPatternMatch = allowedOriginPatterns.some((pattern) => pattern.test(origin));
 
     if (isExactMatch || isPatternMatch) {
-      return callback(null, true);  // ✅ Allow this origin
+      return callback(null, true);
     } else {
       console.warn('❌ CORS blocked:', origin);
       return callback(new Error('Not allowed by CORS'));
@@ -56,21 +58,37 @@ app.use(cors({
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
 }));
 
-
 // Body parsers
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 app.use(cookieParser());
 app.use(morgan("dev"));
 
-// API Routes
-app.use("/api/hero-slides", heroRoutes);
-app.use("/api/cms", cmsRoutes);
-app.use('/api/products', productRoutes);
+// ⚡ SPEED UPGRADE 3: Smart Caching Middleware
+// This tells browsers to keep Hero/Product data for 5 minutes (300s)
+// "stale-while-revalidate" allows the browser to show old data instantly while fetching new data in background
+const cachePublicData = (req, res, next) => {
+  if (req.method === 'GET') {
+    res.set('Cache-Control', 'public, max-age=300, stale-while-revalidate=60');
+  } else {
+    res.set('Cache-Control', 'no-store');
+  }
+  next();
+};
+
+// --- API Routes ---
+
+// ✅ FAST ROUTES (Cached)
+// Applied to Hero and Products so they load instantly on repeat visits
+app.use("/api/hero-slides", cachePublicData, heroRoutes);
+app.use('/api/products', cachePublicData, productRoutes);
+app.use("/api/cms", cachePublicData, cmsRoutes);
+
+// 🔒 DYNAMIC ROUTES (Not Cached)
+// Never cache these (Auth, Cart, Orders) because data changes per user
 app.use('/api/reviews', reviewRoutes);
 app.use('/api/orders', orderRoutes);
 app.use('/api/sales', salesRoutes);
-
 app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/admin', adminRoutes);
@@ -85,7 +103,7 @@ const connectDB = async () => {
     // Railway-specific timeout settings
     await mongoose.connect(uri, {
       serverSelectionTimeoutMS: 5000,
-      socketTimeoutMS: 30000,
+      socketTimeoutMS: 45000, // Increased for stability
       connectTimeoutMS: 30000,
       retryWrites: true,
       w: 'majority'
@@ -101,11 +119,13 @@ const connectDB = async () => {
     process.exit(1);
   }
 };
+
 // Server Startup
 connectDB().then(() => {
   const PORT = process.env.PORT || 5000;
   const server = app.listen(PORT, () => {
     console.log(`🚀 Server running on port ${PORT}`);
+    console.log(`⚡ Speed optimizations (Compression & Caching) enabled`);
     console.log(`🛡️  CORS allowed for: ${allowedOrigins.join(', ')}`);
   });
 
