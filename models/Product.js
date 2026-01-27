@@ -138,5 +138,18 @@ productSchema.pre('save', function(next) {
   next();
 });
 
+// --- SPEED OPTIMIZATIONS (INDEXES) ---
+
+// 1. Speeds up the Hero Section and Homepage (featured products)
+productSchema.index({ featured: 1, status: 1 });
+
+// 2. Speeds up sorting by "Newest Arrivals"
+productSchema.index({ createdAt: -1 });
+
+// 3. Speeds up category filtering
+productSchema.index({ category: 1, status: 1 });
+
+// 4. Speeds up search by tags
+productSchema.index({ tags: 1 });
 
 module.exports = mongoose.model("Product", productSchema);

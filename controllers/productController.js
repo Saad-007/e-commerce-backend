@@ -79,12 +79,14 @@ const getAllProducts = async (req, res) => {
 const getFeaturedProducts = async (req, res) => {
   try {
     const limit = parseInt(req.query.limit) || 8;
+    // ⚡ SPEED FIX: Added .lean() and projection
     const featuredProducts = await Product.find({ 
       featured: true,
       status: true 
-    })
+    }, "name price image images category featured") // Only fetch what the UI needs
     .sort({ createdAt: -1 })
-    .limit(limit);
+    .limit(limit)
+    .lean(); // Returns plain JSON (much faster)
 
     res.json(featuredProducts);
   } catch (err) {
