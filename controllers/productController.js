@@ -39,24 +39,24 @@ const createProduct = async (req, res) => {
 };
 
 // READ ALL
-// READ ALL - Optimized for Atlas Free Tier
 const getAllProducts = async (req, res) => {
   try {
+    // 1. Get query parameters
     const { page = 1, limit = 20, featured, status, category } = req.query;
 
-    // ⚡ FIX: Define the filter properly
+    // 2. ⚡ DEFINE THE FILTER (This was missing!)
     const filter = {};
     if (featured === "true") filter.featured = true;
     if (status === "true") filter.status = true;
     if (category) filter.category = category;
 
+    // 3. Execute query with optimization
     const products = await Product.find(filter)
-      // ⚡ EXTREME SPEED: Only grab what the UI needs for the list/grid
-      .select('name price offerPrice image category featured status createdAt') 
+      .select('-salesHistory') // Hide heavy history for speed
       .sort({ createdAt: -1 })
       .skip((page - 1) * parseInt(limit))
       .limit(parseInt(limit))
-      .lean(); 
+      .lean();
 
     const total = await Product.countDocuments(filter);
 
@@ -67,8 +67,8 @@ const getAllProducts = async (req, res) => {
       products
     });
   } catch (err) {
-    console.error("Error fetching products:", err);
-    res.status(500).json({ message: err.message });
+    console.error("❌ GET ALL PRODUCTS ERROR:", err);
+    res.status(500).json({ message: "Server Error", error: err.message });
   }
 };
 
