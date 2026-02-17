@@ -41,33 +41,19 @@ const createProduct = async (req, res) => {
 // READ ALL
 const getAllProducts = async (req, res) => {
   try {
-    const { page = 1, limit = 20, featured, status } = req.query;
+    const { page = 1, limit = 20 } = req.query;
 
-    // ⚡ FIX: Define the filter object
-    const filter = {};
-    if (featured === "true") filter.featured = true;
-    if (status === "true") filter.status = true;
-
-    // Use projection to keep the payload light
-    const projection = "name price offerPrice image images category featured status createdAt";
-
-    const products = await Product.find(filter, projection)
+    const products = await Product.find({})
+      // ⚡ Only exclude the heaviest field to save memory on the free tier
+      .select('-salesHistory') 
       .sort({ createdAt: -1 })
       .skip((page - 1) * parseInt(limit))
       .limit(parseInt(limit))
-      .lean();
+      .lean(); 
 
-    const total = await Product.countDocuments(filter);
-
-    res.json({
-      total,
-      page: parseInt(page),
-      limit: parseInt(limit),
-      products // This matches your frontend's data.products logic
-    });
+    res.json({ products });
   } catch (err) {
-    console.error("Error fetching products:", err);
-    res.status(500).json({ message: "Server Error", error: err.message });
+    res.status(500).json({ message: err.message });
   }
 };
 
