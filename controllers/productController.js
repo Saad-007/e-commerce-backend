@@ -41,37 +41,18 @@ const createProduct = async (req, res) => {
 // READ ALL
 const getAllProducts = async (req, res) => {
   try {
-    const { page = 1, limit = 20, featured, status } = req.query;
-
-    // Filters
-    const filter = {};
-    if (featured === "true") filter.featured = true;
-    if (status === "true") filter.status = true;
-
-    // ✅ Use correct fields from schema
-    const projection = "name price image images category featured status createdAt";
-
-    // Query with pagination + lean (plain JS objects, faster)
-    const products = await Product.find(filter, projection)
+    const products = await Product.find(filter)
+      // ⚡ Only exclude the heaviest field (salesHistory) 
+      // This keeps images and everything else intact
+      .select('-salesHistory') 
       .sort({ createdAt: -1 })
-      .skip((page - 1) * parseInt(limit))
-      .limit(parseInt(limit))
-      .lean();
+      .lean(); 
 
-    const total = await Product.countDocuments(filter);
-
-    res.json({
-      total,
-      page: parseInt(page),
-      limit: parseInt(limit),
-      products
-    });
+    res.json({ products });
   } catch (err) {
-    console.error("Error fetching products:", err);
     res.status(500).json({ message: err.message });
   }
 };
-
 
 
 
