@@ -39,17 +39,35 @@ const createProduct = async (req, res) => {
 };
 
 // READ ALL
+// READ ALL - Optimized for Atlas Free Tier
 const getAllProducts = async (req, res) => {
   try {
+    const { page = 1, limit = 20, featured, status, category } = req.query;
+
+    // ⚡ FIX: Define the filter properly
+    const filter = {};
+    if (featured === "true") filter.featured = true;
+    if (status === "true") filter.status = true;
+    if (category) filter.category = category;
+
     const products = await Product.find(filter)
-      // ⚡ Only exclude the heaviest field (salesHistory) 
-      // This keeps images and everything else intact
-      .select('-salesHistory') 
+      // ⚡ EXTREME SPEED: Only grab what the UI needs for the list/grid
+      .select('name price offerPrice image category featured status createdAt') 
       .sort({ createdAt: -1 })
+      .skip((page - 1) * parseInt(limit))
+      .limit(parseInt(limit))
       .lean(); 
 
-    res.json({ products });
+    const total = await Product.countDocuments(filter);
+
+    res.json({
+      total,
+      page: parseInt(page),
+      limit: parseInt(limit),
+      products
+    });
   } catch (err) {
+    console.error("Error fetching products:", err);
     res.status(500).json({ message: err.message });
   }
 };
