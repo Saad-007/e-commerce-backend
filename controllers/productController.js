@@ -41,18 +41,17 @@ const createProduct = async (req, res) => {
 // READ ALL
 const getAllProducts = async (req, res) => {
   try {
-    // 1. Get query parameters
-    const { page = 1, limit = 20, featured, status, category } = req.query;
+    const { page = 1, limit = 20, featured, status } = req.query;
 
-    // 2. ⚡ DEFINE THE FILTER (This was missing!)
+    // ⚡ FIX: Define the filter object
     const filter = {};
     if (featured === "true") filter.featured = true;
     if (status === "true") filter.status = true;
-    if (category) filter.category = category;
 
-    // 3. Execute query with optimization
-    const products = await Product.find(filter)
-      .select('-salesHistory') // Hide heavy history for speed
+    // Use projection to keep the payload light
+    const projection = "name price offerPrice image images category featured status createdAt";
+
+    const products = await Product.find(filter, projection)
       .sort({ createdAt: -1 })
       .skip((page - 1) * parseInt(limit))
       .limit(parseInt(limit))
@@ -64,10 +63,10 @@ const getAllProducts = async (req, res) => {
       total,
       page: parseInt(page),
       limit: parseInt(limit),
-      products
+      products // This matches your frontend's data.products logic
     });
   } catch (err) {
-    console.error("❌ GET ALL PRODUCTS ERROR:", err);
+    console.error("Error fetching products:", err);
     res.status(500).json({ message: "Server Error", error: err.message });
   }
 };

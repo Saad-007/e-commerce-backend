@@ -33,6 +33,7 @@ app.use(compression());
 const allowedOrigins = [
   'https://ecommerce-client-woad.vercel.app',  // Main prod
   'http://localhost:5173',                    // Local dev
+  'http://localhost:5174',
 ];
 
 const allowedOriginPatterns = [
